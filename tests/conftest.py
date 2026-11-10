@@ -39,6 +39,9 @@ for _key in ("HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SOCKET", "HC_SESSION"):
 os.environ["TELEGRAM_BOT_TOKEN"] = "test:0000000000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 os.environ["ALLOWED_USERS"] = "12345"
 os.environ["CCGRAM_DIR"] = tempfile.mkdtemp(prefix="ccgram-test-")
+# Without a socket env the hc backend resolves the user's default core; point
+# it at a path that does not exist so an accidental call fails closed.
+os.environ["HC_SOCKET"] = os.path.join(os.environ["CCGRAM_DIR"], "no-hc.sock")
 # Pin to tmux so tests are hermetic: auto-detect would pick the ambient
 # terminal (agterm/herdr/tmux) and change config.multiplexer_name, which
 # breaks every test that uses "ccgram:@0" session-map key format.

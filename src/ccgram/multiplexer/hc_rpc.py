@@ -141,17 +141,29 @@ def _parse(line: bytes, request_id: str) -> dict:
     return result
 
 
+def _abort(writer: asyncio.StreamWriter) -> None:
+    transport = getattr(writer, "transport", None)
+    if transport is not None:
+        with contextlib.suppress(Exception):
+            transport.abort()
+
+
 async def _close(writer: asyncio.StreamWriter) -> None:
+    """Close the connection; abort it when a clean close does not finish.
+
+    Cancellation still propagates after the abort: the event-stream consumer
+    cancels and awaits ``subscribe`` on every rebind and at shutdown.
+    """
     with contextlib.suppress(OSError, RuntimeError):
         writer.close()
     try:
         async with asyncio.timeout(_CLOSE_TIMEOUT_SECONDS):
             await writer.wait_closed()
-    except TimeoutError, OSError, RuntimeError, asyncio.CancelledError:
-        transport = getattr(writer, "transport", None)
-        if transport is not None:
-            with contextlib.suppress(Exception):
-                transport.abort()
+    except asyncio.CancelledError:
+        _abort(writer)
+        raise
+    except TimeoutError, OSError, RuntimeError:
+        _abort(writer)
 
 
 async def request(

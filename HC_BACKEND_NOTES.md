@@ -113,8 +113,10 @@ The running ccgram (`~/.ccgram`, uv tool v4.21.1) must keep its own bot token. T
 
    Hooks write to `$CCGRAM_DIR`, else `~/.ccgram`.
    - Terminals created by the test bot get `CCGRAM_DIR` passed in.
-   - Existing Herdr GUI terminals do not have it, so their hooks write `hc:` entries to `~/.ccgram/session_map.json`. A non-hc instance ignores keys outside its prefix.
-   - For the test instance to bind those existing terminals, either point it at `~/.ccgram` (only after stopping the old instance), or set `CCGRAM_DIR` in the core's environment.
+   - Existing Herdr GUI terminals do not have it, so their hooks write `hc:` entries to `~/.ccgram/session_map.json`. In this branch, readers and pruning only touch their own prefix (`_dead_session_map_entries`). Whether 4.21.1 prunes foreign keys was not checked.
+   - For a trial, prefer terminals the test bot creates (`/new`). Those receive `CCGRAM_DIR`.
+   - To bind existing GUI terminals, point the instance at `~/.ccgram`, and only after the old instance is stopped.
+   - Do **not** inject `CCGRAM_DIR` into the hc core's environment. That needs `hc server stop` plus a start (a restart keeps the old environment), and a stop ends every running agent: kept terminals come back as bare shells.
 
 The backend was exercised end to end against a throwaway core (`HC_SESSION=cgt`, separate `XDG_STATE_HOME`). The run covered:
 
@@ -122,7 +124,7 @@ The backend was exercised end to end against a throwaway core (`HC_SESSION=cgt`,
 - `terminal.send`, raw injection (`!A`, `中文`) and named keys, all with exact bytes verified;
 - capture, rename, kill and `window_died`;
 - pushed `working`/`blocked`/`idle` status;
-- the hook's live `terminal.get`;
+- a real `ccgram hook` SessionStart run inside a throwaway hc terminal, with only the environment hc injects (`HC_TERMINAL_ID`/`HC_TERMINAL_SOCKET`). It wrote `hc:t1` to a scratch `session_map.json`;
 - `ccgram doctor` and `ccgram status`.
 
 Against the real core, the run made `terminal.list`/`terminal.get` reads, plus screen reads during exploration. One early exploratory `terminal.read` with history on `t21` was stitched, which may have briefly scrolled that view. Nothing was sent to the real core's terminals.
