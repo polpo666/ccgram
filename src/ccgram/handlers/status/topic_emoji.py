@@ -412,7 +412,7 @@ async def update_topic_emoji(
         state: One of "active", "idle", "done", "dead"
         display_name: Base topic name (without emoji prefix)
     """
-    if chat_id in _disabled_chats:
+    if not config.status_emoji or chat_id in _disabled_chats:
         return
 
     key = (chat_id, thread_id)

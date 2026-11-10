@@ -271,6 +271,14 @@ class TestUpdateTopicEmoji:
         await update_topic_emoji(bot, -100, 42, "unknown", "myproject")
         bot.edit_forum_topic.assert_not_called()
 
+    async def test_disabled_status_emoji_never_renames(self, monkeypatch) -> None:
+        from ccgram.config import config
+
+        monkeypatch.setattr(config, "status_emoji", False)
+        bot = AsyncMock()
+        await _debounced_update(bot, -100, 42, "active", "myproject")
+        bot.edit_forum_topic.assert_not_called()
+
     async def test_debounce_not_reached(self) -> None:
         bot = AsyncMock()
         with patch(_PATCH_MONOTONIC) as mock_monotonic:

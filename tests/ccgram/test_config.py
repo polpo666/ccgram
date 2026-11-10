@@ -240,6 +240,23 @@ class TestStatusMode:
 
 
 @pytest.mark.usefixtures("_base_env")
+class TestStatusEmoji:
+    def test_default_is_on(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_STATUS_EMOJI", raising=False)
+        assert Config().status_emoji is True
+
+    @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", " off "])
+    def test_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_STATUS_EMOJI", value)
+        assert Config().status_emoji is False
+
+    @pytest.mark.parametrize("value", ["true", "1", "yes", "garbage"])
+    def test_enabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_STATUS_EMOJI", value)
+        assert Config().status_emoji is True
+
+
+@pytest.mark.usefixtures("_base_env")
 class TestLiveViewConfig:
     @pytest.mark.parametrize(
         ("attr", "env_var", "default", "env_str", "expected"),

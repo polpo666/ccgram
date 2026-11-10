@@ -354,6 +354,12 @@ class Config:
             "yes",
         )
 
+        # Each status rename posts a "changed the topic to" service message in
+        # the chat; turning the badge off stops those renames entirely.
+        self.status_emoji: bool = os.getenv(
+            "CCGRAM_STATUS_EMOJI", "true"
+        ).strip().lower() not in ("0", "false", "no", "off")
+
         # Global default batch mode: ephemeral tools (single rolling message deleted
         # on completion). Off by default. Per-window batch_mode takes precedence when
         # explicitly set to any value other than DEFAULT_BATCH_MODE via /verbose.

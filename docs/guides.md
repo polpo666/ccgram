@@ -231,6 +231,7 @@ All settings accept both CLI flags and environment variables. CLI flags take pre
 | `CCGRAM_LIVE_VIEW_INTERVAL` / `--live-view-interval`  | `5`                            | Live view refresh interval in seconds (min 1)                                                        |
 | `CCGRAM_LIVE_VIEW_TIMEOUT` / `--live-view-timeout`    | `300`                          | Live view auto-stop timeout in seconds (min 1)                                                       |
 | `CCGRAM_STATUS_MODE` / `--status-mode`                | `system`                       | Topic emoji color scheme: `system` (green=working) or `user` (green=ready)                           |
+| `CCGRAM_STATUS_EMOJI`                                 | `true`                         | Set `false` to stop status renames of topics (each posts a "changed the topic to" service message)   |
 | `CCGRAM_HIDE_TOOL_CALLS` / `--hide-tool-calls`        | `false`                        | Set `true` to globally hide `tool_use`/`tool_result` messages (per-window override via `/toolcalls`) |
 | `CCGRAM_HIDE_THINKING` / `--hide-thinking`            | `false`                        | Set `true` to globally hide thinking messages                                                        |
 | `CCGRAM_HIDE_STATUS`                                  | `false`                        | Set `true` to suppress transient status bubbles; replies and controls remain available               |
@@ -267,6 +268,8 @@ Topic emojis change color to reflect agent status. The mapping between color and
 | `user`             | agent is idle / ready for input | agent is working | "does anything need my attention?" |
 
 Set globally via `CCGRAM_STATUS_MODE=user` or `--status-mode user`. Invalid values fall back to `system`.
+
+Telegram posts a "changed the topic to …" service message for every rename. To stop status renames altogether, set `CCGRAM_STATUS_EMOJI=false`; run `/sync` once afterwards to strip the badges topics already carry.
 
 ## Status Bubble Visibility
 
