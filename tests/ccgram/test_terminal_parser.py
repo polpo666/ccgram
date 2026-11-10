@@ -106,6 +106,25 @@ class TestParseStatusLine:
         assert parse_status_line(pane) == expected
 
     @pytest.mark.parametrize(
+        "summary",
+        [
+            "Worked for 1m 51s · done 11:29 PM",
+            "Worked for 1m 51s · done 11:29 PM · 1 shell still running",
+            "Cooked for 39s",
+            "Churned for 2h 3m",
+        ],
+    )
+    def test_finished_turn_summary_is_not_a_status(self, summary: str):
+        # Claude Code keeps the spinner glyph on the line it leaves after a
+        # turn; read as live status it held the topic "typing" while idle.
+        pane = f"⏺ done\n\n✻ {summary}\n\n{_SEPARATOR}\n❯ \n{_SEPARATOR}\n"
+        assert parse_status_line(pane) is None
+
+    def test_live_status_with_elapsed_time_is_kept(self):
+        pane = f"✶ Actualizing… (1m 18s · ↓ 4.7k tokens)\n\n{_SEPARATOR}\n"
+        assert parse_status_line(pane) == "Actualizing… (1m 18s · ↓ 4.7k tokens)"
+
+    @pytest.mark.parametrize(
         ("spinner", "text"),
         [
             ("⠋", "Loading modules"),

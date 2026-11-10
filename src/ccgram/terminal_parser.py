@@ -486,6 +486,11 @@ def parse_status_block_from_screen(screen: ScreenBuffer) -> str | None:
 # Spinner characters Claude Code uses in its status line (fast-path lookup)
 STATUS_SPINNERS = frozenset(["·", "✻", "✽", "✶", "✳", "✢"])
 
+# The line Claude Code leaves behind once a turn ends ("✻ Worked for 1m 51s ·
+# done 11:29 PM"). It keeps the spinner glyph, so right above the input box it
+# would read as a live status line and keep the topic "working" forever.
+_TURN_SUMMARY_RE = re.compile(r"[A-Z][a-z]+ for \d+[hms](?: \d+[hms])*(?:\s|·|$)")
+
 # Box-drawing range U+2500–U+257F and other known non-spinner symbols
 _BRAILLE_START = 0x2800
 _BRAILLE_END = 0x28FF
@@ -646,7 +651,9 @@ def _find_status_line_index(lines: list[str], scan_start: int) -> int | None:
             candidate = line.strip()
             if not candidate:
                 continue
-            if is_likely_spinner(candidate[0]):
+            if is_likely_spinner(candidate[0]) and not _TURN_SUMMARY_RE.match(
+                candidate[1:].strip()
+            ):
                 return j + 1
             break
     return None
