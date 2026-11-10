@@ -46,7 +46,7 @@ class _FakeBackend:
 
 
 class TestRegistryResolution:
-    @pytest.mark.parametrize("name", ["tmux", "herdr", "agterm"])
+    @pytest.mark.parametrize("name", ["tmux", "herdr", "agterm", "hc"])
     def test_registered_backend_resolves_to_itself(self, name: str) -> None:
         # Both constructors are I/O-free, so this resolves without a running
         # multiplexer.
@@ -148,6 +148,31 @@ class TestConfigSwitch:
         monkeypatch.delenv("TMUX_PANE", raising=False)
         monkeypatch.setenv("AGTERM_SESSION_ID", "abc-uuid")
         assert Config().multiplexer_name == "agterm"
+
+    def test_auto_detects_hc(self, monkeypatch) -> None:
+        monkeypatch.delenv("CCGRAM_MULTIPLEXER", raising=False)
+        monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+        monkeypatch.delenv("TMUX_PANE", raising=False)
+        monkeypatch.delenv("AGTERM_SESSION_ID", raising=False)
+        monkeypatch.setenv("HC_TERMINAL_ID", "t7")
+        assert Config().multiplexer_name == "hc"
+
+    def test_tmux_inside_hc_is_tmux(self, monkeypatch) -> None:
+        """A tmux started in an hc terminal inherits HC_TERMINAL_ID."""
+        monkeypatch.delenv("CCGRAM_MULTIPLEXER", raising=False)
+        monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+        monkeypatch.setenv("TMUX_PANE", "%0")
+        monkeypatch.setenv("HC_TERMINAL_ID", "t7")
+        assert Config().multiplexer_name == "tmux"
+
+    def test_hc_wins_over_agterm(self, monkeypatch) -> None:
+        """An hc core started from agterm leaks AGTERM_SESSION_ID to terminals."""
+        monkeypatch.delenv("CCGRAM_MULTIPLEXER", raising=False)
+        monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+        monkeypatch.delenv("TMUX_PANE", raising=False)
+        monkeypatch.setenv("AGTERM_SESSION_ID", "abc-uuid")
+        monkeypatch.setenv("HC_TERMINAL_ID", "t7")
+        assert Config().multiplexer_name == "hc"
 
     def test_herdr_wins_over_tmux(self, monkeypatch) -> None:
         """herdr has higher precedence than tmux when both vars are present."""

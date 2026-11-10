@@ -51,10 +51,19 @@ def _make_agterm() -> Multiplexer:
     return AgtermManager()
 
 
+def _make_hc() -> Multiplexer:
+    # Lazy: same reason as herdr — keep the backend out of the registry's
+    # import-time deps; the constructor only resolves the socket path.
+    from ccgram.multiplexer.hc import HcManager
+
+    return HcManager()
+
+
 _FACTORIES: dict[str, Callable[[], Multiplexer]] = {
     "tmux": _make_tmux,
     "herdr": _make_herdr,
     "agterm": _make_agterm,
+    "hc": _make_hc,
 }
 
 _instances: dict[str, Multiplexer] = {}
@@ -90,8 +99,11 @@ def detect_multiplexer_name(env: dict[str, str]) -> str:
     """Detect the active multiplexer backend from environment variables.
 
     Checks backend-specific env vars in priority order and returns the first
-    match. Precedence: herdr > tmux > agterm. Falls back to ``"tmux"`` when
-    none of the backend-specific vars are set.
+    match. Precedence: herdr > tmux > hc > agterm. Falls back to ``"tmux"``
+    when none of the backend-specific vars are set. ``HC_TERMINAL_ID`` is
+    inherited by a tmux or herdr started inside an hc terminal, so it ranks
+    below both; it is more specific than ``AGTERM_SESSION_ID``, which every
+    process agterm spawns inherits, including an hc core started from it.
 
     This is intentionally I/O-free: it only inspects the provided mapping,
     never spawns a subprocess or touches a socket.
@@ -103,6 +115,8 @@ def detect_multiplexer_name(env: dict[str, str]) -> str:
         return "herdr"
     if env.get("TMUX_PANE"):
         return "tmux"
+    if env.get("HC_TERMINAL_ID"):
+        return "hc"
     if env.get("AGTERM_SESSION_ID"):
         return "agterm"
     return "tmux"

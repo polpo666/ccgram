@@ -29,6 +29,12 @@ for _key in list(os.environ):
     if _key.startswith(_CONFIG_ENV_PREFIXES) or _key in _NON_PREFIXED_CONFIG_ENV:
         del os.environ[_key]
 
+# Strip the herdr-core identity a suite run from inside an hc terminal
+# inherits: hooks would otherwise resolve that live terminal, and the hc
+# backend would talk to the user's running core.
+for _key in ("HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SOCKET", "HC_SESSION"):
+    os.environ.pop(_key, None)
+
 # Force-set (not setdefault) to prevent real env vars from leaking into tests
 os.environ["TELEGRAM_BOT_TOKEN"] = "test:0000000000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 os.environ["ALLOWED_USERS"] = "12345"

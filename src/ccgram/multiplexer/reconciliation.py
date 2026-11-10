@@ -7,6 +7,7 @@ import re
 from collections.abc import Callable
 from typing import Protocol, cast
 
+from ..hc_targets import is_hc_address
 from ..herdr_targets import is_herdr_session_target
 from ..window_resolver import is_window_id
 from .base import WindowRef, canonical_window_id
@@ -23,6 +24,7 @@ _BACKEND_WINDOW_ID_VALIDATORS: dict[str, Callable[[str], bool]] = {
     "agterm": lambda value: bool(
         _AGTERM_WINDOW_ID_RE.fullmatch(canonical_window_id(value))
     ),
+    "hc": is_hc_address,
 }
 _MISSING = object()
 

@@ -142,7 +142,7 @@ and forwards the instruction. No pickers. See
 grammar, the defaults that replaced each former step, and `/bind` for adopting
 an already-running window.
 
-**Prerequisites:** Python 3.14+, [tmux](https://github.com/tmux/tmux), [herdr](https://github.com/ogulcancelik/herdr), or [agterm](https://github.com/umputun/agterm), and one agent CLI. CCGram does not modify agent SDKs.
+**Prerequisites:** Python 3.14+, [tmux](https://github.com/tmux/tmux), [herdr](https://github.com/ogulcancelik/herdr), [herdr-core](https://herdr.dev) (`hc`), or [agterm](https://github.com/umputun/agterm), and one agent CLI. CCGram does not modify agent SDKs.
 
 **Hook setup:** `ccgram hook --install` installs asynchronous Claude Code hooks, including `SessionStart` and `Stop`. Re-run it after upgrading to update existing synchronous entries without duplicates. Codex and Pi use native async hooks. Gemini uses a detached background worker, so it does not wait for event reporting either. See [provider hooks](docs/providers.md#hooks) for setup and best-effort delivery limits.
 
@@ -166,6 +166,10 @@ agterm is macOS-native. Install [agterm](https://github.com/umputun/agterm), the
 Set `CCGRAM_MULTIPLEXER=agterm`. CCGram adopts sessions from the `ccgram` workspace by default; set `CCGRAM_AGTERM_WORKSPACES` to a comma-separated list of workspace names, or `*` for all workspaces. Run `ccgram doctor` to verify the CLI and control socket.
 
 Primary and split agents get separate topics, including hidden splits. Split reads and input validate the peer's foreground command before addressing the right pane; a closed, promoted, or changed peer is refused rather than redirected to the primary. Split topics cannot close or rename the shared session. The guard is not atomic with input, and restarting an identical command reuses the target. Avoid rearranging panes during a Telegram send. Hooks require a unique live provider/session match; ambiguous same-provider panes without explicit CLI session IDs are not bound.
+
+### herdr-core (hc) setup
+
+[herdr-core](https://herdr.dev) (`hc`) is the terminal runtime behind the Herdr GUI app; it is not the Herdr TUI above. Set `CCGRAM_MULTIPLEXER=hc`, or run CCGram inside an hc terminal, where `HC_TERMINAL_ID` selects it automatically. CCGram finds the core the way `hc` does: `HC_SOCKET`, then `HC_TERMINAL_SOCKET`, then `HC_SESSION` under `$XDG_STATE_HOME/herdr-core/`. Each topic is one hc terminal, keyed by its durable address (`t7`). Any live local terminal whose foreground process is a known agent is adopted, except CCGram's own terminal, names starting with `_`, terminals another agent started, and Herdr's `hc attach` viewers. Set `CCGRAM_HC_LABELS=key=value,...` to adopt only terminals carrying those labels. Status and terminal death are pushed from hc's event stream. Run `ccgram doctor` to verify the socket.
 
 ## Platform Support
 

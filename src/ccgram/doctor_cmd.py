@@ -42,6 +42,7 @@ _DEFAULT_MULTIPLEXER = "tmux"
 _HERDR_BACKEND = "herdr"
 _TMUX_BACKEND = "tmux"
 _AGTERM_BACKEND = "agterm"
+_HC_BACKEND = "hc"
 
 
 def _active_multiplexer_name() -> str:
@@ -159,6 +160,22 @@ def _check_agterm() -> tuple[str, str]:
         return _FAIL, f"agterm control socket unreachable: {exc}"
     where = f" ({socket})" if socket else " (default socket)"
     return _PASS, f"agterm control socket reachable{where}"
+
+
+def _check_hc() -> tuple[str, str]:
+    """hc: the herdr-core socket answers."""
+    # Lazy: defer the registry import (see _check_multiplexer).
+    from .multiplexer import get_multiplexer
+
+    # Lazy: the socket path helper is only needed for the report line.
+    from .multiplexer.hc_rpc import resolve_socket_path
+
+    backend = get_multiplexer(_HC_BACKEND)
+    try:
+        asyncio.run(backend.ensure_session())
+    except Exception as exc:  # noqa: BLE001 — surface any backend failure verbatim
+        return _FAIL, f"herdr-core unreachable: {exc}"
+    return _PASS, f"herdr-core reachable ({resolve_socket_path()})"
 
 
 def _check_tmux() -> tuple[str, str]:
@@ -531,6 +548,9 @@ def doctor_main(fix: bool = False) -> None:
         has_failures = has_failures or failed
     elif mux_name == _AGTERM_BACKEND:
         _, _, failed = _run_check(_check_agterm)
+        has_failures = has_failures or failed
+    elif mux_name == _HC_BACKEND:
+        _, _, failed = _run_check(_check_hc)
         has_failures = has_failures or failed
     else:
         _, _, failed = _run_check(_check_tmux)

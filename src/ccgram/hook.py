@@ -33,7 +33,7 @@ from ccgram.hooks.adapters import (
 )
 from ccgram.hooks.model import HookAdapter, NormalizedHookEvent, ProviderName
 from ccgram.multiplexer import get_multiplexer
-from ccgram.multiplexer import herdr_socket
+from ccgram.multiplexer import hc_rpc, herdr_socket
 from ccgram.multiplexer.agterm_panes import hook_pane
 from ccgram.multiplexer.self_identify import resolve_self_identity
 
@@ -1103,6 +1103,26 @@ def _closest_claude_ancestor(
     return None
 
 
+def _is_nested_below(
+    snapshot: dict[int, tuple[int, int, str, str]], fg_pgid: int
+) -> bool:
+    """Whether the hook's closest claude sits below another claude.
+
+    The claude leading the foreground group ``fg_pgid`` is the primary; any
+    other claude with a claude ancestor is nested. See
+    ``_is_nested_session`` for why ancestry, not group leadership, decides.
+    """
+    owner = _closest_claude_ancestor(snapshot, os.getpid())
+    if owner is None:
+        return False
+    if owner == fg_pgid:
+        return False
+    owner_info = snapshot.get(owner)
+    if owner_info is None:
+        return False
+    return _closest_claude_ancestor(snapshot, owner_info[0]) is not None
+
+
 def _is_nested_session(pane_tty: str) -> bool:
     """Return True if the hook was fired by a nested (non-foreground) claude.
 
@@ -1129,15 +1149,7 @@ def _is_nested_session(pane_tty: str) -> bool:
     fg_pgid = _foreground_pgid_on_tty(snapshot, pane_tty)
     if fg_pgid is None:
         return False
-    owner = _closest_claude_ancestor(snapshot, os.getpid())
-    if owner is None:
-        return False
-    if owner == fg_pgid:
-        return False
-    owner_info = snapshot.get(owner)
-    if owner_info is None:
-        return False
-    return _closest_claude_ancestor(snapshot, owner_info[0]) is not None
+    return _is_nested_below(snapshot, fg_pgid)
 
 
 def _acquire_hook_lock(file: TextIO) -> bool:
@@ -1595,6 +1607,34 @@ def _agterm_hook_target(
         return None
 
 
+def _hc_hook_target(address: str, provider_name: str) -> tuple[str, str] | None:
+    """Confirm the hook's hc terminal against the live core.
+
+    The address is the identity, so the check is only that the terminal is
+    live and, for claude, that the hook did not come from a claude nested
+    under the terminal's foreground one (hc reports the foreground group
+    leader, standing in for the tmux tty lookup). Fails closed: an
+    unreachable core drops the hook rather than binding blind.
+    """
+    try:
+        record = hc_rpc.request_sync(
+            hc_rpc.resolve_socket_path(), "terminal.get", {"terminal": address}
+        )
+    except hc_rpc.HcRpcError as exc:
+        logger.debug("Could not confirm hc terminal %s: %s", address, exc.message)
+        return None
+    if record.get("state") != "live":
+        return None
+    foreground = record.get("foreground")
+    fg_pid = foreground.get("pid") if isinstance(foreground, dict) else None
+    if provider_name == "claude" and isinstance(fg_pid, int) and fg_pid > 0:
+        snapshot = _ps_snapshot()
+        if snapshot and _is_nested_below(snapshot, fg_pid):
+            logger.info("Skipping hook from nested claude in hc terminal %s", address)
+            return None
+    return address, hc_rpc.terminal_display_name(record)
+
+
 def _locate_primary_window(
     session_id: str,
     event: str,
@@ -1613,7 +1653,8 @@ def _locate_primary_window(
     Identity resolution is backend-neutral via ``resolve_self_identity``: tmux
     panes resolve through ``_resolve_window_id`` (``display-message``), herdr
     panes resolve their exact workspace/pane locator to a session target, so
-    the session_map key becomes ``herdr:<opaque-target-id>``, and an agterm
+    the session_map key becomes ``herdr:<opaque-target-id>``, an hc terminal
+    keys by its durable address (``hc:<address>``), and an agterm
     primary retains ``agterm:<session-uuid>`` while split peers resolve to their
     own guarded target from the live argv snapshot.
     """
@@ -1630,16 +1671,18 @@ def _locate_primary_window(
                 agterm_session, provider_name, session_id
             )
         ),
+        hc_query=lambda address: _hc_hook_target(address, provider_name),
     )
     if identity is None:
         if (
             not os.environ.get("TMUX_PANE")
             and not os.environ.get("HERDR_PANE_ID")
+            and not os.environ.get("HC_TERMINAL_ID")
             and not os.environ.get("AGTERM_SESSION_ID")
         ):
             logger.warning(
-                "None of TMUX_PANE, HERDR_PANE_ID or AGTERM_SESSION_ID set, "
-                "cannot determine window"
+                "None of TMUX_PANE, HERDR_PANE_ID, HC_TERMINAL_ID or "
+                "AGTERM_SESSION_ID set, cannot determine window"
             )
         elif os.environ.get("HERDR_PANE_ID"):
             logger.warning(
@@ -1978,7 +2021,9 @@ def _process_hook_stdin(
             if normalized.transcript_path
             else herdr_transcript_path
         ),
-        recover_missing=session_window_key.startswith("agterm:"),
+        # Durable-identity backends can bind an agent whose SessionStart was
+        # missed (started before ccgram's hook was installed) on a later hook.
+        recover_missing=session_window_key.startswith(("agterm:", "hc:")),
     )
     _write_event(event, normalized.session_id, session_window_key, normalized.data)
     return normalized

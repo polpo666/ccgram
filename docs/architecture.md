@@ -10,6 +10,10 @@ The Herdr adapter accepts socket protocols 14–22 without warnings and attempts
 
 [agterm](https://github.com/umputun/agterm) is macOS-native. Its adapter drives the `agtermctl` CLI through agterm's local control socket. An agterm session UUID is the neutral `window_id`; agterm persists that UUID across restarts, so no alias reconciliation is required. Discovery defaults to the `ccgram` workspace and can be scoped with `CCGRAM_AGTERM_WORKSPACES`; agterm supports workspace selection for new sessions.
 
+## herdr-core (hc) compatibility
+
+`multiplexer/hc.py` drives herdr-core terminals over the core's JSON-RPC socket; `multiplexer/hc_rpc.py` owns the transport. A terminal address (`t7`) is the neutral `window_id` and the session-map key (`hc:t7`). hc keeps an address for the life of the core, so no alias reconciliation is required. Remote terminals (`machine/t7`) are never listed. Status comes from programs' OSC 7501 reports, pushed by `events.subscribe`. Screen reads use `terminal.read` with no history, because a history read of a full-screen app scrolls it. Input uses `terminal.send` (paste and submit) and `terminal.keys` (named keys, encoded for the program's keyboard mode). Text without Enter is written as automatic input on a short framed `terminal.attach` at the terminal's current size. hc cannot rename a live terminal, so a rename becomes the `ccgram.name` label. Hooks resolve identity from `HC_TERMINAL_ID` after confirming that the terminal is live and the agent is not nested.
+
 ## Mobile session API
 
 The shared `session_protocol/` core owns session discovery, canonical transcript

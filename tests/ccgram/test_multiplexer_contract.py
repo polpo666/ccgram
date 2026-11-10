@@ -21,7 +21,7 @@ from ccgram.multiplexer import UnknownMultiplexerError, get_multiplexer
 from ccgram.multiplexer.base import Multiplexer, MultiplexerCapabilities
 
 # Every backend the contract should hold for. Unregistered names skip.
-CANDIDATE_BACKENDS = ["tmux", "herdr", "agterm"]
+CANDIDATE_BACKENDS = ["tmux", "herdr", "agterm", "hc"]
 
 # The full method surface every backend must expose (Protocol + transitional).
 CONTRACT_METHODS = (
@@ -420,3 +420,37 @@ async def test_tmux_does_not_prove_foreign_ids_absent(
 
     assert await window_presence(window_id, backend) is None
     assert await window_snapshot(window_id, backend) == (False, None)
+
+
+@pytest.mark.parametrize(
+    "window_id",
+    [
+        pytest.param("@42", id="tmux"),
+        pytest.param(_AGTERM_WINDOW_ID, id="agterm"),
+        pytest.param(_HERDR_WINDOW_ID, id="herdr"),
+        pytest.param("vps/t3", id="hc-remote"),
+    ],
+)
+async def test_hc_does_not_prove_foreign_ids_absent(window_id: str) -> None:
+    from ccgram.multiplexer.hc import HcManager
+    from ccgram.multiplexer.reconciliation import window_presence, window_snapshot
+
+    async def never(*_args: object) -> dict:
+        raise AssertionError("foreign window reached hc")
+
+    backend = HcManager(requester=never, own_terminal="", label_scope={})
+    assert await window_presence(window_id, backend) is None
+    assert await window_snapshot(window_id, backend) == (False, None)
+
+
+async def test_hc_finished_terminal_is_proven_absent() -> None:
+    from ccgram.multiplexer.hc import HcManager
+    from ccgram.multiplexer.reconciliation import window_presence
+
+    async def requester(method: str, params: object, timeout: float) -> dict:
+        del params, timeout
+        assert method == "terminal.get"
+        return {"address": "t7", "state": "finished"}
+
+    backend = HcManager(requester=requester, own_terminal="", label_scope={})
+    assert await window_presence("t7", backend) is False

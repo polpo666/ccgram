@@ -139,6 +139,68 @@ class TestResolveSelfIdentity:
         )
         assert ident is not None and ident.mux == "herdr"
 
+    def test_hc_terminal_id_is_the_identity(self) -> None:
+        ident = resolve_self_identity(
+            {"HC_TERMINAL_ID": "t1r"},
+            tmux_query=_fail_query,
+            hc_query=lambda address: (address, "repo / tab"),
+        )
+        assert ident is not None
+        assert ident.mux == "hc"
+        assert ident.window_id == "t1r"
+        assert ident.session_window_key == "hc:t1r"
+        assert ident.window_name == "repo / tab"
+
+    def test_hc_without_a_probe_takes_the_address(self) -> None:
+        ident = resolve_self_identity({"HC_TERMINAL_ID": "t7"}, tmux_query=_fail_query)
+        assert ident is not None and ident.session_window_key == "hc:t7"
+
+    def test_failed_hc_probe_drops_the_hook(self) -> None:
+        # A nested agent or a finished terminal must not fall through to the
+        # agterm session the hc core may have inherited.
+        env = {"HC_TERMINAL_ID": "t7", "AGTERM_SESSION_ID": "157B4C8C"}
+        assert (
+            resolve_self_identity(
+                env, tmux_query=_fail_query, hc_query=lambda _address: None
+            )
+            is None
+        )
+
+    def test_remote_hc_address_is_not_an_identity(self) -> None:
+        assert (
+            resolve_self_identity(
+                {"HC_TERMINAL_ID": "vps/t3"},
+                tmux_query=_fail_query,
+                hc_query=lambda _address: pytest.fail("must not probe"),
+            )
+            is None
+        )
+
+    def test_tmux_inside_hc_reports_tmux(self) -> None:
+        env = {"TMUX_PANE": "%1", "HC_TERMINAL_ID": "t7"}
+        ident = resolve_self_identity(
+            env, tmux_query=lambda _pane: ("s:@1", "@1", "win", "/dev/ttys1")
+        )
+        assert ident is not None and ident.mux == "tmux"
+
+    def test_herdr_inside_hc_reports_herdr(self) -> None:
+        env = {
+            "HERDR_PANE_ID": "w2:p1",
+            "HERDR_WORKSPACE_ID": "w2",
+            "HC_TERMINAL_ID": "t7",
+        }
+        ident = resolve_self_identity(
+            env,
+            tmux_query=_fail_query,
+            herdr_query=lambda _workspace, _pane: "herdr-session-v1-target",
+        )
+        assert ident is not None and ident.mux == "herdr"
+
+    def test_hc_wins_over_agterm(self) -> None:
+        env = {"HC_TERMINAL_ID": "t7", "AGTERM_SESSION_ID": "157B4C8C"}
+        ident = resolve_self_identity(env, tmux_query=_fail_query)
+        assert ident is not None and ident.mux == "hc"
+
     def test_failed_herdr_probe_inside_agterm_does_not_fall_through(self) -> None:
         # A herdr pane whose probe fails must skip the session_map write, not
         # silently record the surrounding agterm session as its identity.
@@ -275,6 +337,21 @@ class TestLocatePrimaryWindowThroughResolver:
         located = _locate_primary_window("sid", "Stop", "claude")
         assert located is not None
         assert located[0] == "agterm:157B4C8C-EFAE-40C2-BA54-9A5D7FD8B5E4"
+
+    def test_hc_terminal_resolves_through_the_hook(self, monkeypatch) -> None:
+        monkeypatch.delenv("TMUX_PANE", raising=False)
+        monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+        monkeypatch.setenv("HC_TERMINAL_ID", "t1r")
+        monkeypatch.setattr(
+            "ccgram.hook._hc_hook_target", lambda address, _provider: (address, "repo")
+        )
+        from ccgram.hook import _locate_primary_window
+
+        assert _locate_primary_window("sid", "Stop", "claude") == (
+            "hc:t1r",
+            "t1r",
+            "repo",
+        )
 
     def test_herdr_pane_resolves_to_session_target(self, monkeypatch) -> None:
         monkeypatch.delenv("TMUX_PANE", raising=False)
